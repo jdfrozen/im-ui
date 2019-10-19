@@ -192,7 +192,7 @@ export default {
         return;
       }
       this.sendMessage(2, this.msg)
-      this.sendHttpMessage(1,1,2,this.msg)
+      this.sendHttpMessage(this.uid,1,2,this.msg)
     },
     sendMessage(type, msg){
       this.socket.send(JSON.stringify({
@@ -236,7 +236,6 @@ export default {
       if(window.WebSocket){
         vm.socket = new WebSocket('ws://localhost:8899/ws');
         let socket = vm.socket;
-
         socket.onopen = function(e){
           console.log("连接服务器成功");
           vm.$message({type: 'success', message: '连接服务器成功'})
