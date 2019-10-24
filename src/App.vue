@@ -73,6 +73,7 @@
 <script>
 import Vue from 'vue'
 import moment from 'moment'
+import axios from 'axios'
 
 
 export default {
@@ -163,14 +164,18 @@ export default {
       })
     },
     currentUserList() {
+      // let vm = this;
+      // vm.users.map(user=>{
+      //   user.unread = this.messageList.filter(item=>{
+      //     return item.bridge.length && item.uid === user.uid && item.status === 1
+      //   }).length
+      //   return user;
+      // })
+      // return vm.users;
       let vm = this;
-      vm.users.map(user=>{
-        user.unread = this.messageList.filter(item=>{
-          return item.bridge.length && item.uid === user.uid && item.status === 1
-        }).length
-        return user;
-      })
-      return vm.users;
+      var jsonStr ='[{"unread":"01","nickname":"fenfen","pId":"0","some":[{"uid":"01"}]}]';
+      vm.users =  JSON.parse(jsonStr);
+      return  vm.users
     }
   },
   methods: {
@@ -196,17 +201,10 @@ export default {
         this.$message({type: 'error', message: '请输入群名称'})
         return;
       }
-      // this.socket.send(JSON.stringify({
-      //   uid: this.uid,
-      //   type: 10,
-      //   nickname: this.nickname,
-      //   groupName: this.groupName,
-      //   bridge: []
-      // }));
       let userGroupVo = {"name":this.groupName,"adminId":this.uid,"nick":this.nickname};
       axios.post(`http://localhost:8082/group/createGroup`,userGroupVo)
         .then(res=>{
-          console.log('消息发送成功',userGroupVo);
+          console.log('新建群成功',userGroupVo);
         }).catch(function (res) {
         alert(res)
       });
@@ -240,18 +238,7 @@ export default {
         this.$message({type: 'error', message: '请选择发送人或者群'})
         return;
       }
-      this.sendMessage(100, this.msg)
       this.sendHttpMessage(this.uid,this.groupId,this.bridge,this.msg)
-    },
-    sendMessage(type, msg){
-      this.socket.send(JSON.stringify({
-        uid: this.uid,
-        type: type,
-        nickname: this.nickname,
-        msg: msg,
-        bridge: this.bridge,
-        groupId: this.groupId
-      }));
     },
     sendWsMessage(str){
       this.socket.send(str);
@@ -283,9 +270,8 @@ export default {
     conWebSocket(){
       let vm = this;
       if(window.WebSocket){
-        vm.socket = new WebSocket('ws://localhost:8001');
+        vm.socket = new WebSocket('ws://localhost:8899/ws');
         let socket = vm.socket;
-
         socket.onopen = function(e){
           console.log("连接服务器成功");
           vm.$message({type: 'success', message: '连接服务器成功'})
@@ -310,7 +296,6 @@ export default {
           if (message.groups){
             vm.groups = message.groups;
           }
-
           vm.$nextTick(function(){
             var div = document.getElementById('im-record');
             div.scrollTop = div.scrollHeight;
