@@ -18,38 +18,52 @@
       <input class="nickname" v-model="groupName" type="text" placeholder="请输入群名称">
     </c-dialog>
 
-    <div class="web-im">
-      <div class="dis-flex">
-        <div class="user-list">
-          <div class="user create-group-btn" @click="$refs.createGroupDialog.show()">新建群</div>
-          <div class="user" @click="triggerGroup(item)" v-for="item in groups">
-            {{item.name}}
-            <span class="tips-num">{{getGroupMsgNum(item)}}</span>
-            <span v-if="!checkUserIsGroup(item)" @click.stop="addGroup(item)" class="add-group">+</span>
+    <div class="web-im dis-flex">
+      <div class="left">
+        <div class="aside content">
+          <div class="header">
+            <div class="tabbar dis-flex">
+              <label :class="{active:switchType==1, unread: usersUnRead}" for="" @click="switchType=1">联系人</label>
+              <label :class="{active:switchType==2, unread: groupsUnRead}" for="" @click="switchType=2">群聊</label>
+            </div>
           </div>
-          <div class="user" @click="triggerPersonal(item)" v-if="item.uid!=uid" v-for="item in users">
-            {{item.nickname}}
-            <span class="tips-num">{{getUserMsgNum(item)}}</span>
+          <div class="body user-list">
+            <div v-if="switchType==2" class="user" @click="triggerGroup(item)" v-for="item in currentGroups">
+              {{item.name}}
+              <span class="tips-num" v-if="item.unread">{{item.unread}}</span>
+              <span v-if="!checkUserIsGroup(item)" @click.stop="addGroup(item)" class="add-group">+</span>
+            </div>
+            <div v-if="switchType==1 && item.uid!=uid" class="user" @click="triggerPersonal(item)" :class="{offline: !item.status}" v-for="item in currentUserList">
+              {{item.nickname}}
+              <span class="tips-num" v-if="item.unread">{{item.unread}}</span>
+            </div>
           </div>
-
+          <div class="footer">
+            <div class="func dis-flex">
+              <label @click="$refs.createGroupDialog.show()">新建群</label>
+            </div>
+          </div>
         </div>
-        <div class="msg-content">
-          <div class="header im-title">{{title}}</div>
-            <div class="content im-record">
-              <div class="li" :class="{user: item.uid == uid}" v-for="item in currentMessage">
-                <template v-if="item.type===1">
-                  <p class="join-tips">{{item.msg}}</p>
-                </template>
-                <template v-else>
-                  <div class="img">{{item.nickname}}</div>
-                  <p class="message-box">{{item.msg}}</p>
-                </template>
-              </div>
+      </div>
+      <div class="right content">
+        <div class="header im-title">{{title}}</div>
+        <div class="body im-record" id="im-record">
+          <div class="ul">
+            <div class="li" :class="{user: item.uid == uid}" v-for="item in currentMessage">
+              <template v-if="item.type===1">
+                <p class="join-tips">{{item.msg}}</p>
+              </template>
+              <template v-else>
+                <p class="message-date">
+                  <span class="m-nickname">{{item.nickname}}</span> {{item.date}}</p>
+                <p class="message-box">{{item.msg}}</p>
+              </template>
             </div>
-            <div class="footer im-input">
-              <input type="text" v-model="msg" placeholder="请输入内容">
-              <button @click="send">发送</button>
-            </div>
+          </div>
+        </div>
+        <div class="footer im-input dis-flex">
+          <input type="text" v-model="msg" placeholder="请输入内容">
+          <button @click="send">发送</button>
         </div>
       </div>
     </div>
@@ -59,7 +73,6 @@
 <script>
 import Vue from 'vue'
 import moment from 'moment'
-import axios from 'axios'
 
 
 export default {
@@ -70,6 +83,7 @@ export default {
   data(){
     return {
       title: '请选择群或者人员进行聊天',
+      switchType: 1,
       uid: '',
       nickname: '',
       socket: '',
@@ -78,7 +92,8 @@ export default {
       users: [],
       groups: [],
       groupId: '',
-      bridge: []
+      bridge: [],
+      groupName: ''
     }
   },
   mounted() {
@@ -100,13 +115,22 @@ export default {
             vm.send()
         }
     }
-
+    window.onbeforeunload = function (e) {
+      vm.socket.send(JSON.stringify({
+        uid: vm.uid,
+        type: 2,
+        nickname: vm.nickname,
+        bridge: []
+      }));
+    }
   },
   computed: {
     currentMessage() {
       let vm = this;
       let data = vm.messageList.filter(item=>{
-        if(this.groupId) {
+        if(item.type === 1) {
+          return item;
+        } else if(this.groupId) {
           return item.groupId === this.groupId
         } else if(item.bridge.length){
           return item.bridge.sort().join(',') == vm.bridge.sort().join(',')
@@ -117,6 +141,36 @@ export default {
         return item;
       })
       return data;
+    },
+    currentGroups() {
+      let vm = this;
+      vm.groups.map(group=>{
+        group.unread = this.messageList.filter(item=>{
+          return item.groupId === group.id && item.status === 1
+        }).length
+        return group;
+      })
+      return vm.groups;
+    },
+    groupsUnRead(){
+      return this.messageList.some(item=>{
+        return item.groupId && item.status === 1
+      })
+    },
+    usersUnRead(){
+      return this.messageList.some(item=>{
+        return item.bridge.length && item.status === 1
+      })
+    },
+    currentUserList() {
+      let vm = this;
+      vm.users.map(user=>{
+        user.unread = this.messageList.filter(item=>{
+          return item.bridge.length && item.uid === user.uid && item.status === 1
+        }).length
+        return user;
+      })
+      return vm.users;
     }
   },
   methods: {
@@ -137,6 +191,11 @@ export default {
       })
     },
     createGroup(){
+      this.groupName = this.groupName.trim();
+      if(!this.groupName){
+        this.$message({type: 'error', message: '请输入群名称'})
+        return;
+      }
       // this.socket.send(JSON.stringify({
       //   uid: this.uid,
       //   type: 10,
@@ -151,17 +210,6 @@ export default {
         }).catch(function (res) {
         alert(res)
       });
-
-    },
-    getGroupMsgNum(group){
-      return this.messageList.filter(item=>{
-        return item.groupId === group.id && item.status === 1
-      }).length
-    },
-    getUserMsgNum(user){
-      return this.messageList.filter(item=>{
-        return item.bridge.length && item.uid === user.uid && item.status === 1
-      }).length
     },
     triggerGroup(item) {
       let issome = item.users.some(item=>{
@@ -184,6 +232,7 @@ export default {
       this.title = `和${item.nickname}聊天`;
     },
     send(){
+      this.msg = this.msg.trim();
       if(!this.msg){
         return
       }
@@ -191,8 +240,8 @@ export default {
         this.$message({type: 'error', message: '请选择发送人或者群'})
         return;
       }
-      this.sendMessage(2, this.msg)
-      this.sendHttpMessage(this.uid,1,2,this.msg)
+      this.sendMessage(100, this.msg)
+      this.sendHttpMessage(this.uid,this.groupId,this.bridge,this.msg)
     },
     sendMessage(type, msg){
       this.socket.send(JSON.stringify({
@@ -213,8 +262,8 @@ export default {
         .then(res=>{
           console.log('消息发送成功',msgVo);
         }).catch(function (res) {
-          alert(res)
-        })
+        alert(res)
+      })
       this.msg='';
     },
     getUserId(nickname){
@@ -234,8 +283,9 @@ export default {
     conWebSocket(){
       let vm = this;
       if(window.WebSocket){
-        vm.socket = new WebSocket('ws://localhost:8899/ws');
+        vm.socket = new WebSocket('ws://localhost:8001');
         let socket = vm.socket;
+
         socket.onopen = function(e){
           console.log("连接服务器成功");
           vm.$message({type: 'success', message: '连接服务器成功'})
@@ -260,10 +310,20 @@ export default {
           if (message.groups){
             vm.groups = message.groups;
           }
+
+          vm.$nextTick(function(){
+            var div = document.getElementById('im-record');
+            div.scrollTop = div.scrollHeight;
+          })
         }
       }
     },
     login(){
+      this.nickname = this.this.nickname.trim();
+      if(!this.nickname){
+        this.$message({type: 'error', message: '请输入您的昵称'})
+        return;
+      }
       this.$refs.loginDialog.hide()
       this.conWebSocket();
     }
