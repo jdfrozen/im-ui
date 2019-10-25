@@ -84,8 +84,8 @@ export default {
   data(){
     return {
       title: '请选择群或者人员进行聊天',
-      switchType: 1,
-      uid: '',
+      switchType: 2,
+      uid: '01',
       nickname: '',
       socket: '',
       msg: '',
@@ -144,14 +144,18 @@ export default {
       return data;
     },
     currentGroups() {
-      let vm = this;
-      vm.groups.map(group=>{
-        group.unread = this.messageList.filter(item=>{
-          return item.groupId === group.id && item.status === 1
-        }).length
-        return group;
-      })
-      return vm.groups;
+      // let vm = this;
+      // vm.groups.map(group=>{
+      //   group.unread = this.messageList.filter(item=>{
+      //     return item.groupId === group.id && item.status === 1
+      //   }).length
+      //   return group;
+      // })
+      // return vm.groups;
+        let vm = this;
+var jsonStr ='[{"unread":"01","name":"fenfen","uid":"01","users":[{"uid":"01"}]}]';
+        vm.groups =  JSON.parse(jsonStr);
+        return  vm.groups
     },
     groupsUnRead(){
       return this.messageList.some(item=>{
@@ -173,7 +177,7 @@ export default {
       // })
       // return vm.users;
       let vm = this;
-      var jsonStr ='[{"unread":"01","nickname":"fenfen","pId":"0","some":[{"uid":"01"}]}]';
+      var jsonStr ='[{"unread":"01","nickname":"fenfen","pId":"0"}]';
       vm.users =  JSON.parse(jsonStr);
       return  vm.users
     }
