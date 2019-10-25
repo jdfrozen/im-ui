@@ -85,7 +85,7 @@ export default {
     return {
       title: '请选择群或者人员进行聊天',
       switchType: 2,
-      uid: '01',
+      uid: '',
       nickname: '',
       socket: '',
       msg: '',
@@ -126,6 +126,8 @@ export default {
     }
   },
   computed: {
+      // var jsonStr ='[{"type":"01","msg":"fenfenfff","uid":1,"status":1,"bridge":{"length":true}}]';
+      // vm.messageList =  JSON.parse(jsonStr);
     currentMessage() {
       let vm = this;
       let data = vm.messageList.filter(item=>{
@@ -134,7 +136,8 @@ export default {
         } else if(this.groupId) {
           return item.groupId === this.groupId
         } else if(item.bridge.length){
-          return item.bridge.sort().join(',') == vm.bridge.sort().join(',')
+            return true;
+          //return item.bridge.sort().join(',') == vm.bridge.sort().join(',')
         }
       })
       data.map(item=>{
@@ -143,18 +146,10 @@ export default {
       })
       return data;
     },
+      //实时更新过滤群列表信息
     currentGroups() {
-      // let vm = this;
-      // vm.groups.map(group=>{
-      //   group.unread = this.messageList.filter(item=>{
-      //     return item.groupId === group.id && item.status === 1
-      //   }).length
-      //   return group;
-      // })
-      // return vm.groups;
         let vm = this;
-var jsonStr ='[{"unread":"01","name":"fenfen","uid":"01","users":[{"uid":"01"}]}]';
-        vm.groups =  JSON.parse(jsonStr);
+        vm.groups =  this.groups;
         return  vm.groups
     },
     groupsUnRead(){
@@ -167,18 +162,10 @@ var jsonStr ='[{"unread":"01","name":"fenfen","uid":"01","users":[{"uid":"01"}]}
         return item.bridge.length && item.status === 1
       })
     },
+      //实时更新过滤用户列表
     currentUserList() {
-      // let vm = this;
-      // vm.users.map(user=>{
-      //   user.unread = this.messageList.filter(item=>{
-      //     return item.bridge.length && item.uid === user.uid && item.status === 1
-      //   }).length
-      //   return user;
-      // })
-      // return vm.users;
       let vm = this;
-      var jsonStr ='[{"unread":"01","nickname":"fenfen","pId":"0"}]';
-      vm.users =  JSON.parse(jsonStr);
+      vm.users =  this.users;
       return  vm.users
     }
   },
@@ -233,6 +220,7 @@ var jsonStr ='[{"unread":"01","name":"fenfen","uid":"01","users":[{"uid":"01"}]}
       this.bridge = [this.uid, item.uid];
       this.title = `和${item.nickname}聊天`;
     },
+      //发送聊天消息
     send(){
       this.msg = this.msg.trim();
       if(!this.msg){
@@ -244,9 +232,11 @@ var jsonStr ='[{"unread":"01","name":"fenfen","uid":"01","users":[{"uid":"01"}]}
       }
       this.sendHttpMessage(this.uid,this.groupId,this.bridge,this.msg)
     },
+      //调用ws进行发送消息
     sendWsMessage(str){
       this.socket.send(str);
     },
+      //调用http发送聊天消息
     sendHttpMessage(userId,receiverId,type, msg){
       let msgVo = {"userId":userId,"receiverId":receiverId,"msg":msg,"type":type};
       axios.post(`http://localhost:8082/im/sendMsg`,msgVo)
@@ -257,6 +247,7 @@ var jsonStr ='[{"unread":"01","name":"fenfen","uid":"01","users":[{"uid":"01"}]}
       })
       this.msg='';
     },
+      //根据昵称获取用户ID
     getUserId(nickname){
       let userVo = {"name":nickname};
       axios.post(`http://localhost:8082/user/getByName`,userVo)
@@ -267,8 +258,29 @@ var jsonStr ='[{"unread":"01","name":"fenfen","uid":"01","users":[{"uid":"01"}]}
             uid: dataBody.id,
             nickname: nickname
           }))
+            return dataBody.id;
         }).catch(function (res) {
         alert(res)
+      })
+    },
+    getGroupByUser(nickname){
+      let vm = this;
+      let userVo = {"name":nickname};
+      axios.post(`http://localhost:8082/group/getGroupByUser`,userVo)
+          .then(function (res) {
+              vm.groups = res.data.dataBody;
+          }).catch(function (res) {
+          alert(res)
+      })
+      },
+    getRelations(nickname){
+      let vm = this;
+      let userVo = {"name":nickname};
+      axios.post(`http://localhost:8082/user/getRelations`,userVo)
+          .then(function (res) {
+              vm.users = res.data.dataBody;
+          }).catch(function (res) {
+          alert(res)
       })
     },
     conWebSocket(){
@@ -281,7 +293,11 @@ var jsonStr ='[{"unread":"01","name":"fenfen","uid":"01","users":[{"uid":"01"}]}
           vm.$message({type: 'success', message: '连接服务器成功'})
           //获取用户ID
           vm.getUserId(vm.nickname);
-          //登录
+          //初始化群
+          vm.getGroupByUser(vm.nickname);
+          //初始化用户列表
+          vm.getRelations(vm.nickname);
+          //WS登录
           vm.sendWsMessage('login:'+vm.uid);
         }
         socket.onclose = function(e){
@@ -294,12 +310,6 @@ var jsonStr ='[{"unread":"01","name":"fenfen","uid":"01","users":[{"uid":"01"}]}
         socket.onmessage = function(e){
           let message = JSON.parse(e.data);
           vm.messageList.push(message);
-          if(message.users) {
-            vm.users = message.users;
-          }
-          if (message.groups){
-            vm.groups = message.groups;
-          }
           vm.$nextTick(function(){
             var div = document.getElementById('im-record');
             div.scrollTop = div.scrollHeight;
